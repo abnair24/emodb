@@ -1,6 +1,7 @@
 package com.bazaarvoice.emodb.blob.db.astyanax;
 
 import com.bazaarvoice.emodb.blob.BlobReadConsistency;
+import com.bazaarvoice.emodb.blob.core.BlobPlacement;
 import com.bazaarvoice.emodb.blob.db.StorageProvider;
 import com.bazaarvoice.emodb.blob.db.StorageSummary;
 import com.bazaarvoice.emodb.common.api.impl.LimitCounter;

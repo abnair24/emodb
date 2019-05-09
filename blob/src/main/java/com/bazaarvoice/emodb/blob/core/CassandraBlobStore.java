@@ -38,7 +38,6 @@ import java.nio.ByteBuffer;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
@@ -51,12 +50,12 @@ import static java.lang.String.format;
 /**
  * Stores large binary objects like photos, videos.
  */
-public class DefaultBlobStore implements BlobStore {
+public class CassandraBlobStore implements BlobStore {
     private final TableDAO _tableDao;
     private final StorageProvider _storageProvider;
 
     @Inject
-    public DefaultBlobStore(TableDAO tableDao, StorageProvider storageProvider) {
+    public CassandraBlobStore(TableDAO tableDao, StorageProvider storageProvider) {
         _tableDao = checkNotNull(tableDao, "tableDao");
         _storageProvider = checkNotNull(storageProvider, "storageProvider");
     }
