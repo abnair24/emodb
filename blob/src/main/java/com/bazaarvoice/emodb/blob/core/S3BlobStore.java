@@ -1,6 +1,7 @@
 package com.bazaarvoice.emodb.blob.core;
 
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.bazaarvoice.emodb.blob.api.Blob;
 import com.bazaarvoice.emodb.blob.api.BlobMetadata;
 import com.bazaarvoice.emodb.blob.api.BlobNotFoundException;
@@ -30,6 +31,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -98,7 +100,7 @@ public class S3BlobStore implements BlobStore {
         String tablePlacement = getTablePlacement(getTableMetadata(tableName));
 
         _tableDao.audit(tableName, "purge", audit);
-        _s3StorageProvider.delete(tableName, tablePlacement);
+        _s3StorageProvider.delete(tableName, tablePlacement, false);
     }
 
     @Override
@@ -161,6 +163,12 @@ public class S3BlobStore implements BlobStore {
 
     @Override
     public Iterator<BlobMetadata> scanMetadata(final String tableName, @Nullable final String fromBlobIdExclusive, final long limit) {
+//        TODO should be conditional
+//        required agreement with other teams
+        return scanMetadataV2(tableName, fromBlobIdExclusive, limit);
+    }
+
+    private Iterator<BlobMetadata> scanMetadataV1(String tableName, @Nullable String fromBlobIdExclusive, long limit) {
         checkLegalTableName(tableName);
 
         Table tableMetadata = getTableMetadata(tableName);
@@ -172,6 +180,20 @@ public class S3BlobStore implements BlobStore {
                     String blobId = summary.getKey().substring(summary.getKey().lastIndexOf('/') + 1);
                     return createBlobMetadata(blobId, _s3StorageProvider.getObjectMetadata(tableName, tablePlacement, blobId), attributes);
                 })
+                .iterator();
+    }
+
+    public Iterator<BlobMetadata> scanMetadataV2(final String tableName, @Nullable final String fromBlobIdExclusive, final long limit) {
+        checkLegalTableName(tableName);
+
+        Table tableMetadata = getTableMetadata(tableName);
+        String tablePlacement = getTablePlacement(tableMetadata);
+        Stream<S3ObjectSummary> list = _s3StorageProvider.list(tableName, tablePlacement, fromBlobIdExclusive, limit);
+
+        Map<String, String> tableAttributes = tableMetadata.getAttributes();
+
+        return list
+                .map(summary -> createBlobMetadata(summary, tableAttributes))
                 .iterator();
     }
 
@@ -223,6 +245,15 @@ public class S3BlobStore implements BlobStore {
         return new DefaultBlobMetadata(blobId, om.getLastModified(), om.getContentLength(), om.getUserMetaDataOf("MD5"), om.getUserMetaDataOf("SHA-1"), attributes);
     }
 
+    private static BlobMetadata createBlobMetadata(final S3ObjectSummary summary,
+                                                   final Map<String, String> tableAttributes) {
+        String blobId = summary.getKey().substring(summary.getKey().lastIndexOf('/') + 1);
+        Map<String, String> attributes = new HashMap<>(tableAttributes);
+        attributes.put("contentLength", String.valueOf(summary.getSize()));
+
+        return new DefaultBlobMetadata(blobId, summary.getLastModified(), summary.getSize(), summary.getETag(), null, attributes);
+    }
+
     @Override
     public void put(final String tableName, final String blobId,
                     final InputSupplier<? extends InputStream> in,
@@ -243,7 +274,8 @@ public class S3BlobStore implements BlobStore {
         checkLegalBlobId(blobId);
         String tablePlacement = getTablePlacement(getTableMetadata(tableName));
 
-        _s3StorageProvider.delete(tableName, tablePlacement, blobId);
+        boolean withVersions = false;
+        _s3StorageProvider.delete(tableName, tablePlacement, blobId, withVersions);
     }
 
     @Override
